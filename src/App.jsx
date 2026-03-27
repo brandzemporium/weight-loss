@@ -209,15 +209,19 @@ function ScoreRing({ score, size = 100, light = true }) {
   const color = score >= 80 ? "#16a34a" : score >= 50 ? "#d97706" : "#dc2626";
   const trackColor = light ? "#e5e7eb" : "rgba(255,255,255,0.08)";
   return (
-    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={trackColor} strokeWidth="7" />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="7"
-        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-        style={{ transition: "stroke-dashoffset 0.8s ease" }} />
-      <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        fill={color} fontSize={size * 0.26} fontWeight="800"
-        style={{ transform: "rotate(90deg)", transformOrigin: "center" }}>{score}</text>
-    </svg>
+    <div style={{ position: "relative", width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={trackColor} strokeWidth="7" />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="7"
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+      </svg>
+      <div style={{
+        position: "absolute", top: 0, left: 0, width: size, height: size,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: size * 0.26, fontWeight: 800, color: color,
+      }}>{score}</div>
+    </div>
   );
 }
 
