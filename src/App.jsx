@@ -222,7 +222,7 @@ function ScoreRing({ score, size = 100, light = true }) {
 }
 
 // ─── Photo Meal Analyzer ───
-function PhotoAnalyzer({ onResult, accent }) {
+function PhotoAnalyzer({ onResult, accent, apiKey }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState(null);
@@ -232,6 +232,11 @@ function PhotoAnalyzer({ onResult, accent }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+
+    if (!apiKey) {
+      setError("Please set your Claude API key in the Coach tab → Settings first.");
+      return;
+    }
 
     // Preview
     const reader = new FileReader();
@@ -252,7 +257,7 @@ function PhotoAnalyzer({ onResult, accent }) {
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
@@ -307,7 +312,7 @@ Be realistic with South Asian portions. A typical plate of biryani is 400-600 ca
       border: "1.5px dashed #d1d5db", textAlign: "center", marginBottom: 20,
       position: "relative", overflow: "hidden",
     }}>
-      <input ref={fileRef} type="file" accept="image/*" capture="environment"
+      <input ref={fileRef} type="file" accept="image/*"
         onChange={handleFile} style={{ display: "none" }} id="meal-photo" />
 
       {preview && (
@@ -416,6 +421,24 @@ export default function ZubairOS() {
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachFeedback, setCoachFeedback] = useState(null);
   const [coachError, setCoachError] = useState(null);
+  const [apiKey, setApiKey] = useState(() => {
+    try { return localStorage.getItem("zubair_os_api_key") || ""; } catch { return ""; }
+  });
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+
+  function saveApiKey() {
+    const key = apiKeyInput.trim();
+    if (!key) return;
+    setApiKey(key);
+    try { localStorage.setItem("zubair_os_api_key", key); } catch {}
+    setApiKeyInput("");
+    setShowSettings(false);
+  }
+  function clearApiKey() {
+    setApiKey("");
+    try { localStorage.removeItem("zubair_os_api_key"); } catch {}
+  }
 
   useEffect(() => { saveData(state); }, [state]);
   useEffect(() => {
@@ -680,7 +703,7 @@ export default function ZubairOS() {
             </div>
 
             {/* Photo Analyzer */}
-            <PhotoAnalyzer onResult={setPhotoResult} accent={accent} />
+            <PhotoAnalyzer onResult={setPhotoResult} accent={accent} apiKey={apiKey} />
             <PhotoResultCard result={photoResult} onAdd={(m) => { addMeal(m); setPhotoResult(null); }} accent={accent} />
 
             {cd.mode === "home" ? (
@@ -1310,6 +1333,10 @@ TOTAL HISTORY: ${hist.length} days tracked`;
           }
 
           async function getCoachFeedback() {
+            if (!apiKey) {
+              setCoachError("Please set your Claude API key in Settings below first.");
+              return;
+            }
             setCoachLoading(true);
             setCoachError(null);
             setCoachFeedback(null);
@@ -1317,7 +1344,7 @@ TOTAL HISTORY: ${hist.length} days tracked`;
               const dataSummary = buildDataSummary();
               const response = await fetch("https://api.anthropic.com/v1/messages", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
                 body: JSON.stringify({
                   model: "claude-sonnet-4-20250514",
                   max_tokens: 1000,
@@ -1555,6 +1582,62 @@ Rules:
                   ❤️‍🩹 {tip}
                 </div>
               ))}
+            </div>
+
+            {/* Settings — API Key */}
+            <div style={cardStyle}>
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                cursor: "pointer",
+              }} onClick={() => setShowSettings(!showSettings)}>
+                <div style={{ fontSize: 15, fontWeight: 900 }}>⚙️ Settings</div>
+                <div style={{ fontSize: 12, color: apiKey ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
+                  {apiKey ? "✅ API Key Set" : "⚠️ API Key Required"}
+                </div>
+              </div>
+              {showSettings && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10, lineHeight: 1.6 }}>
+                    The AI features (meal photo analysis & coach feedback) need a Claude API key.
+                    Get one at <strong>console.anthropic.com</strong> → API Keys.
+                    Your key is stored only on your device.
+                  </div>
+                  {apiKey ? (
+                    <div>
+                      <div style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        background: "#f0fdf4", borderRadius: 10, padding: "10px 14px",
+                        border: "1px solid #bbf7d0",
+                      }}>
+                        <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 700 }}>
+                          Key: ••••••••{apiKey.slice(-8)}
+                        </span>
+                        <button onClick={clearApiKey} style={{
+                          background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626",
+                          borderRadius: 8, padding: "6px 12px", fontSize: 11, cursor: "pointer", fontWeight: 700,
+                        }}>Remove</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        type="password"
+                        value={apiKeyInput}
+                        onChange={e => setApiKeyInput(e.target.value)}
+                        placeholder="sk-ant-api..."
+                        style={{
+                          flex: 1, background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10,
+                          padding: "10px 14px", color: "#111827", fontSize: 13, outline: "none",
+                        }}
+                      />
+                      <button onClick={saveApiKey} style={{
+                        background: accent, color: "#fff", border: "none", borderRadius: 10,
+                        padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      }}>Save</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* PWA Install */}
