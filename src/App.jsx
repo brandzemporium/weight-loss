@@ -255,9 +255,9 @@ function PhotoAnalyzer({ onResult, accent, apiKey }) {
 
       const mediaType = file.type || "image/jpeg";
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
@@ -1342,9 +1342,9 @@ TOTAL HISTORY: ${hist.length} days tracked`;
             setCoachFeedback(null);
             try {
               const dataSummary = buildDataSummary();
-              const response = await fetch("https://api.anthropic.com/v1/messages", {
+              const response = await fetch("/api/claude", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+                headers: { "Content-Type": "application/json", "x-api-key": apiKey },
                 body: JSON.stringify({
                   model: "claude-sonnet-4-20250514",
                   max_tokens: 1000,
