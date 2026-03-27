@@ -270,22 +270,48 @@ function PhotoAnalyzer({ onResult, accent, apiKey }) {
               },
               {
                 type: "text",
-                text: `You are a nutrition estimation expert helping someone on a weight loss journey who eats South Asian / Halal food.
+                text: `You are an expert at identifying South Asian and Middle Eastern food from photos. The person eating this food follows a Halal diet and primarily eats Pakistani, Indian, and Middle Eastern cuisine.
 
-Analyze this meal photo and respond ONLY with a JSON object, no markdown, no backticks, no preamble:
+CRITICAL IDENTIFICATION RULES:
+- Look carefully at texture, color, shape, and cooking method before identifying
+- Shami kabab: smooth, round/oval, dark brown, made from minced meat — do NOT confuse with besan chilla (which is yellow, thin, flat, made from gram flour)
+- Paratha: layered, flaky flatbread, golden-brown, thicker than roti/chapati
+- Roti/chapati: thin, simple, often with char spots, no layers
+- Naan: thick, teardrop shape, often bubbly, from tandoor
+- Biryani vs pulao: biryani has distinct layers and more color variation
+- Nihari vs haleem: nihari is a clear stew, haleem is thick/paste-like
+- Seekh kabab: long cylindrical shape on skewer vs shami kabab: round flat patty
+- Pakora: irregular chunky fried pieces vs samosa: triangular pastry
+
+Look at EACH distinct food item on the plate separately. Count portions carefully (how many kababs, how many parathas, etc).
+
+Respond ONLY with a JSON object, no markdown, no backticks, no preamble:
 
 {
-  "meal_name": "Brief descriptive name of the meal",
+  "meal_name": "Brief descriptive name of the full meal",
   "items": [
-    {"name": "item name", "estimated_cals": number, "estimated_protein_g": number}
+    {"name": "specific item name with count (e.g. 2 shami kabab)", "estimated_cals": number, "estimated_protein_g": number}
   ],
   "total_calories": number,
   "total_protein_g": number,
-  "portion_notes": "Brief note about portion size observed",
+  "portion_notes": "Brief note about portion sizes observed",
   "healthier_swap": "One quick suggestion to save 100+ calories next time"
 }
 
-Be realistic with South Asian portions. A typical plate of biryani is 400-600 cal, a roti is ~120 cal, a curry serving is 250-400 cal depending on oil/ghee. Estimate conservatively but honestly.`
+CALORIE REFERENCE for accuracy:
+- Shami kabab: ~120-150 cal each, ~8-10g protein
+- Seekh kabab: ~150-180 cal each, ~12-15g protein
+- Chicken tikka (3-4 pcs): ~200-250 cal, ~25-30g protein
+- Paratha (oil/ghee): ~200-250 cal each, ~4-5g protein
+- Roti/chapati: ~100-120 cal each, ~3g protein
+- Naan: ~260-300 cal each, ~7g protein
+- Biryani (1 plate): ~450-600 cal, ~20-25g protein
+- Daal (1 serving): ~150-200 cal, ~8-12g protein
+- Chicken curry: ~300-400 cal per serving, ~25-30g protein
+- Raita (1 cup): ~80-100 cal, ~4g protein
+- Samosa (1): ~250-300 cal, ~5g protein
+
+Estimate conservatively but honestly. Do not undercount oil/ghee.`
               }
             ]
           }],
@@ -426,6 +452,8 @@ export default function ZubairOS() {
   });
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [mealText, setMealText] = useState("");
+  const [mealEstimating, setMealEstimating] = useState(false);
 
   function saveApiKey() {
     const key = apiKeyInput.trim();
@@ -476,6 +504,70 @@ export default function ZubairOS() {
     if (!w || w < 50 || w > 200) return;
     setState(p => ({ ...p, currentDay: { ...p.currentDay, weight: w }, latestWeight: w }));
     setWeightInput("");
+  }
+
+  async function estimateMeal() {
+    const text = mealText.trim();
+    if (!text) return;
+    if (!apiKey) {
+      alert("Please set your Claude API key in Coach tab → Settings first.");
+      return;
+    }
+    setMealEstimating(true);
+    try {
+      const response = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 500,
+          messages: [{
+            role: "user",
+            content: `You are a South Asian food nutrition expert. Estimate the calories and protein for this meal. The person eats Halal / Pakistani / Indian food.
+
+Meal: "${text}"
+
+Respond ONLY with a JSON object, no markdown, no backticks, no preamble:
+{"meal_name": "cleaned up meal name", "total_calories": number, "total_protein_g": number}
+
+CALORIE REFERENCE:
+- Shami kabab: 130 cal each, 9g protein
+- Seekh kabab: 160 cal each, 13g protein  
+- Chicken tikka piece: 60 cal, 8g protein
+- Paratha (ghee): 230 cal, 5g protein
+- Roti/chapati: 110 cal, 3g protein
+- Naan: 280 cal, 7g protein
+- Biryani (1 plate): 500 cal, 22g protein
+- Daal (1 bowl): 180 cal, 10g protein
+- Chicken curry serving: 350 cal, 28g protein
+- Raita (1 cup): 90 cal, 4g protein
+- Rice (1 cup cooked): 200 cal, 4g protein
+- Samosa: 260 cal, 5g protein
+- Pakora (3-4 pcs): 200 cal, 4g protein
+- Chai with milk+sugar: 100 cal, 3g protein
+- Lassi (sweet): 200 cal, 6g protein
+- Boiled egg: 75 cal, 6g protein
+- Omelette (2 eggs): 180 cal, 13g protein
+
+Be realistic. Count each item mentioned. Include oil/ghee in estimates.`
+          }],
+        }),
+      });
+      const data = await response.json();
+      const raw = data.content?.map(i => i.text || "").join("") || "";
+      const clean = raw.replace(/\`\`\`json|\`\`\`/g, "").trim();
+      const parsed = JSON.parse(clean);
+      addMeal({
+        name: parsed.meal_name || text,
+        cals: parsed.total_calories || 0,
+        protein: parsed.total_protein_g || 0,
+      });
+      setMealText("");
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't estimate. Try again or use manual entry below.");
+    }
+    setMealEstimating(false);
   }
   function resetAll() { if (confirm("Reset ALL data? Cannot undo.")) setState(defaultState()); }
 
@@ -746,22 +838,47 @@ export default function ZubairOS() {
               </div>
             )}
 
-            {/* Custom logger */}
+            {/* Smart meal logger */}
             <div style={cardStyle}>
-              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12, color: "#111" }}>📝 Log Custom Meal</div>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4, color: "#111" }}>📝 Log Meal</div>
+              <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>
+                Just describe what you ate — AI estimates the rest
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <input value={customMeal.name} onChange={e => setCustomMeal({...customMeal, name: e.target.value})}
-                  placeholder="What did you eat?" style={inputStyle} />
+                <input value={mealText} onChange={e => setMealText(e.target.value)}
+                  placeholder="e.g. 2 shami kabab + 1 paratha + raita"
+                  style={inputStyle}
+                  onKeyDown={e => { if (e.key === "Enter") estimateMeal(); }} />
                 <div style={{ display: "flex", gap: 8 }}>
-                  <input value={customMeal.cals} onChange={e => setCustomMeal({...customMeal, cals: e.target.value})}
-                    placeholder="Calories" type="number" style={inputStyle} />
-                  <input value={customMeal.protein} onChange={e => setCustomMeal({...customMeal, protein: e.target.value})}
-                    placeholder="Protein (g)" type="number" style={inputStyle} />
+                  <button onClick={estimateMeal} disabled={mealEstimating || !mealText.trim()} style={{
+                    flex: 1, background: (!mealText.trim() || mealEstimating) ? "#e5e7eb" : accent,
+                    color: (!mealText.trim() || mealEstimating) ? "#9ca3af" : "#fff",
+                    border: "none", borderRadius: 10,
+                    padding: "12px", fontWeight: 700, fontSize: 14, cursor: mealEstimating ? "wait" : "pointer",
+                  }}>
+                    {mealEstimating ? "Estimating..." : "🤖 Estimate & Log"}
+                  </button>
                 </div>
-                <button onClick={addCustomMeal} style={{
-                  background: accent, color: "#fff", border: "none", borderRadius: 10,
-                  padding: "12px", fontWeight: 700, fontSize: 14, cursor: "pointer",
-                }}>+ Add Meal</button>
+                {/* Manual fallback */}
+                <details style={{ marginTop: 4 }}>
+                  <summary style={{ fontSize: 12, color: "#9ca3af", cursor: "pointer" }}>
+                    Or enter calories manually
+                  </summary>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                    <input value={customMeal.name} onChange={e => setCustomMeal({...customMeal, name: e.target.value})}
+                      placeholder="Meal name" style={inputStyle} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input value={customMeal.cals} onChange={e => setCustomMeal({...customMeal, cals: e.target.value})}
+                        placeholder="Calories" type="number" style={inputStyle} />
+                      <input value={customMeal.protein} onChange={e => setCustomMeal({...customMeal, protein: e.target.value})}
+                        placeholder="Protein (g)" type="number" style={inputStyle} />
+                    </div>
+                    <button onClick={addCustomMeal} style={{
+                      background: "#6b7280", color: "#fff", border: "none", borderRadius: 10,
+                      padding: "10px", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                    }}>+ Add Manually</button>
+                  </div>
+                </details>
               </div>
             </div>
 
